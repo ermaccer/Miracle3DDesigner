@@ -21,7 +21,7 @@ M3DManager*  eApp::pM3DManager;
 INT_PTR CALLBACK eApp::Process(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	hWindow = hDlg;
-
+	HANDLE hicon = 0;
 
 	if (!bIsReady)
 	{
@@ -81,8 +81,10 @@ INT_PTR CALLBACK eApp::Process(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		Button_SetCheck(GetDlgItem(hDlg, M3D_COMBINE_MDL), TRUE);
 		Button_SetCheck(GetDlgItem(hDlg, M3D_NOFLIPUV), TRUE);
 		CreateTooltip(GetDlgItem(hDlg, M3D_COMBINE_MDL), L"Attaches all seperate objects to main mesh and rigs them");
-		PushLogMessage(hList, L"Miracle3D Designer v." + (std::wstring)M3D_DESIGNER_VERSION + L" ready!");
+		PushLogMessage(hList, L"Miracle3D Designer v" + (std::wstring)M3D_DESIGNER_VERSION + L" ready!");
 		hMenu = GetMenu(hDlg);
+		hicon = LoadImage(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDI_M3DDESIGNER), IMAGE_ICON, 0, 0, LR_DEFAULTCOLOR | LR_DEFAULTSIZE);
+		SendMessage(hDlg, WM_SETICON, ICON_BIG, (LPARAM)hicon);
 		return (INT_PTR)TRUE;
 	case WM_CLOSE:
 		EndDialog(hDlg, LOWORD(wParam));
@@ -111,9 +113,11 @@ INT_PTR CALLBACK eApp::Process(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 
 		if (LOWORD(wParam) == M3D_COMPILE)
 		{
-			pM3DManager->Compile(SetSavePathFromButton(L"Miracle3D Model (*.sam)(*.gsm)\0*.sam;*.gsm\0All Files (*.*)\0*.*\0", L"sam", hDlg));
+			pM3DManager->Compile(SetSavePathFromButton(L"Miracle3D Model (*.sam)(*.gsm)\0*.sam;*.gsm\0All Files (*.*)\0*.*\0", L"sam", hDlg), IsDlgButtonChecked(hDlg, M3D_FLIP_UV));
 		}
-			
+
+		if (wParam == IDM_ABOUT)
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hDlg, About);
 
 		if (LOWORD(wParam) == ID_FILE_CLOSE)
 			pM3DManager->Close();
@@ -124,6 +128,24 @@ INT_PTR CALLBACK eApp::Process(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			return (INT_PTR)TRUE;
 		}
 
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR eApp::About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
 	}
 	return (INT_PTR)FALSE;
 }

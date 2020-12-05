@@ -21,7 +21,6 @@ void M3DManager::Init(HWND * list, HWND * box, HWND * key, HWND * table)
 	hTextureNameBox = key;
 	hFileNameBox = table;
 	hLogBox = list;
-	pLog = fopen("log.txt", "w");
 }
 
 void M3DManager::OpenFile(std::wstring input)
@@ -75,7 +74,6 @@ void M3DManager::ReadFile()
 
 	if (pFile.is_open())
 	{
-		WorkType = WORK_MODEL;
 		Log(L"Opening: " + wsplitString(InputPath, true));
 		m3d_header m3d;
 		pFile.read((char*)&m3d, sizeof(m3d_header));
@@ -289,9 +287,14 @@ void M3DManager::ReadFile()
 					static_model_header minfo;
 					pFile.read((char*)&minfo, sizeof(static_model_header));
 					sModelInfo = minfo;
-
+					
 					Log(L"Verts: " + std::to_wstring(sModelInfo.vertices));
 					Log(L"Faces: " + std::to_wstring(sModelInfo.faces));
+
+					std::string str(sModelInfo.textName, strlen(sModelInfo.textName));
+					std::wstring str2(str.length(), L' ');
+					std::copy(str.begin(), str.end(), str2.begin());
+					SetTextureText(str2);
 
 				}
 
@@ -384,6 +387,7 @@ void M3DManager::ReadINI()
 	Log(L"INI loaded!");
 	Log(L"Type: " + std::to_wstring(cfg.type));
 	Log(L"Texture: " + cfg.TextureName);
+	if (cfg.type == M3D_MODEL_ANIMATED)
 	Log(L"Anims: " + cfg.AnimatedData + L" - " + std::to_wstring(cfg.animationNumber));
 	Log(L"Model: " + cfg.Model);
 
@@ -472,7 +476,7 @@ void M3DManager::ExportToSMD(std::wstring folder, bool combine, bool flipUV)
 
 					oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
 						<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
-						<< maps.u << " " << 1.0 - maps.v;
+						<< maps.u << " " << 1.0 - maps.v << " " << 0;
 
 					oFile << std::endl;
 				}
@@ -714,7 +718,7 @@ void M3DManager::ExportToSMD(std::wstring folder, bool combine, bool flipUV)
 
 							oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
 								<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
-								<< maps.u << " " << 1.0 - maps.v;
+								<< maps.u << " " << 1.0 - maps.v << " " <<  0;
 
 							oFile << std::endl;
 						}
@@ -1160,13 +1164,18 @@ void M3DManager::OpenSMD(std::wstring file)
 	Log(L"Total bone links: " + std::to_wstring(totalBoneLinks));
 
 	Models.push_back(model);
+	fclose(pFile);
 }
 
-void M3DManager::Compile(std::wstring file)
+void M3DManager::Compile(std::wstring file, bool dontFlipUV)
 {
 
+	if (file.empty())
+		return;
 
 	wchar_t buffer[512];
+
+	Models.clear();
 
 	GetWindowText(GetDlgItem(eApp::hWindow, M3D_COMPILE_FOLDER), buffer, sizeof(buffer));
 
@@ -1195,145 +1204,375 @@ void M3DManager::Compile(std::wstring file)
 
 	// model loaded
 	OpenSMD(ModelConfig.Model);
-
-	// write sections
-
-	m3d_header m3d;
-
-	sprintf(m3d.header, "ecbnt,t");
-	m3d.type = M3D_MODEL_ANIMATED;
-	m3d.version = 1;
-
-	oFile.write((char*)&m3d, sizeof(m3d_header));
-
-	// write sections
-
-	int baseOffset = sizeof(m3d_header) + (sizeof(m3d_section) *(m3d.type - 1)) + (sizeof(int) * 3);
-
-	m3d_section section_modelInfo;
-	section_modelInfo.offset = baseOffset;
-	section_modelInfo.size = sizeof(model_info);
-	section_modelInfo.type = MODEL_INFO_IDENT;
-
-	oFile.write((char*)&section_modelInfo, sizeof(m3d_section));
-
-	baseOffset += section_modelInfo.size;
-
-	m3d_section section_boneInfo;
-	section_boneInfo.offset = baseOffset;
-	section_boneInfo.size = sizeof(bone_info) * Skeleton.size();
-	section_boneInfo.type = BONE_INFO_IDENT;
-
-	oFile.write((char*)&section_boneInfo, sizeof(m3d_section));
-
-	baseOffset += section_boneInfo.size;
-
-	m3d_section section_groupInfo;
-
-	int groupInfoSize = sizeof(group_info) + Get3DDataSize(Models[0]);
-
-
-	section_groupInfo.offset = baseOffset;
-	section_groupInfo.size = groupInfoSize;
-	section_groupInfo.type = GROUP_INFO_IDENT;
-
-	oFile.write((char*)&section_groupInfo, sizeof(m3d_section));
-
-	baseOffset += section_groupInfo.size;
-
-
-	m3d_section section_animInfo;
-	section_animInfo.offset = baseOffset;
-	section_animInfo.size = std::filesystem::file_size(ModelConfig.AnimatedData);
-	section_animInfo.type = ANIM_INFO_IDENT;
-
-	oFile.write((char*)&section_animInfo, sizeof(m3d_section));
-
-	baseOffset += section_animInfo.size;
-
-
-	m3d_section section_endInfo;
-	section_endInfo.offset = baseOffset;
-	section_endInfo.size = sizeof(end_info);
-	section_endInfo.type = END_INFO_IDENT;
-
-	baseOffset += section_endInfo.size;
-
-	oFile.write((char*)&section_endInfo, sizeof(m3d_section));
-
-	int size, offset, pad = 0;
-	size = sizeof(int);
-	offset = baseOffset;
-
-	oFile.write((char*)&size, sizeof(int));
-	oFile.write((char*)&offset, sizeof(int));
-	oFile.write((char*)&pad, sizeof(int));
-
-	model_info m;
-	m.actualBones = 0;
-	m.boneAmount = Skeleton.size();
-	m.skinnedObjects = 1;
-	m.dummyObjects = 0;
-	m.normalObjects = 0;
-	m.animations = ModelConfig.animationNumber;
-	
-
-	std::wstring str = ModelConfig.TextureName;
-	std::string str2(" ", str.length());
-	std::copy(str.begin(), str.end(), str2.begin());
-	sprintf(m.textureName, str2.c_str());
-
-	oFile.write((char*)&m, sizeof(model_info));
-
-	for (int i = 0; i < Skeleton.size(); i++)
-		oFile.write((char*)&Skeleton[i], sizeof(bone_info));
-
-	group_info group;
-	sprintf(group.name, Models[0].Name.c_str());
-	group.faces = Models[0].Faces.size();
-	group.verts = Models[0].Verts.size();
-	group.type = 2;
-	group.unk = 1;
-
-	oFile.write((char*)&group, sizeof(group_info));
-
-	for (int i = 0; i < Models[0].Verts.size(); i++)
+	OptimizeForCompilation();
+	if (ModelConfig.type == M3D_MODEL_ANIMATED)
 	{
-		oFile.write((char*)&Models[0].Verts[i].vert, sizeof(v));
-		oFile.write((char*)&Models[0].Normals[i], sizeof(vn));
-		oFile.write((char*)&Models[0].Maps[i], sizeof(uv));
-		short boneLinks = Models[0].Verts[i].BoneLinks.size();
+		// write sections
 
-		printf("boneLinks for %d - %d\n", i, boneLinks);
+		m3d_header m3d;
 
-		oFile.write((char*)&boneLinks, sizeof(short));
-		if (boneLinks > 0)
-		for (int k = 0; k < boneLinks; k++)
-			oFile.write((char*)&Models[0].Verts[i].BoneLinks[k], sizeof(bone_link));
+		sprintf(m3d.header, "ecbnt,t");
+		m3d.type = M3D_MODEL_ANIMATED;
+		m3d.version = 1;
+
+		oFile.write((char*)&m3d, sizeof(m3d_header));
+		Log(L"Saved SAM Header");
+		// write sections
+
+		int baseOffset = sizeof(m3d_header) + (sizeof(m3d_section) *(m3d.type - 1)) + (sizeof(int) * 3);
+
+		m3d_section section_modelInfo;
+		section_modelInfo.offset = baseOffset;
+		section_modelInfo.size = sizeof(model_info);
+		section_modelInfo.type = MODEL_INFO_IDENT;
+
+		oFile.write((char*)&section_modelInfo, sizeof(m3d_section));
+
+		baseOffset += section_modelInfo.size;
+
+		m3d_section section_boneInfo;
+		section_boneInfo.offset = baseOffset;
+		section_boneInfo.size = sizeof(bone_info) * Skeleton.size();
+		section_boneInfo.type = BONE_INFO_IDENT;
+
+		oFile.write((char*)&section_boneInfo, sizeof(m3d_section));
+
+		baseOffset += section_boneInfo.size;
+
+		m3d_section section_groupInfo;
+
+		int groupInfoSize = sizeof(group_info) + Get3DDataSize(Models[0]);
+
+
+		section_groupInfo.offset = baseOffset;
+		section_groupInfo.size = groupInfoSize;
+		section_groupInfo.type = GROUP_INFO_IDENT;
+
+		oFile.write((char*)&section_groupInfo, sizeof(m3d_section));
+
+		baseOffset += section_groupInfo.size;
+
+
+		m3d_section section_animInfo;
+		section_animInfo.offset = baseOffset;
+		section_animInfo.size = std::filesystem::file_size(ModelConfig.AnimatedData);
+		section_animInfo.type = ANIM_INFO_IDENT;
+
+		oFile.write((char*)&section_animInfo, sizeof(m3d_section));
+
+		baseOffset += section_animInfo.size;
+
+
+		m3d_section section_endInfo;
+		section_endInfo.offset = baseOffset;
+		section_endInfo.size = sizeof(end_info);
+		section_endInfo.type = END_INFO_IDENT;
+
+		baseOffset += section_endInfo.size;
+
+		oFile.write((char*)&section_endInfo, sizeof(m3d_section));
+
+		int size, offset, pad = 0;
+		size = sizeof(int);
+		offset = baseOffset;
+
+		oFile.write((char*)&size, sizeof(int));
+		oFile.write((char*)&offset, sizeof(int));
+		oFile.write((char*)&pad, sizeof(int));
+
+
+		Log(L"Saved SAM Section Info");
+
+		model_info m;
+		m.actualBones = 0;
+		m.boneAmount = Skeleton.size();
+		m.skinnedObjects = 1;
+		m.dummyObjects = 0;
+		m.normalObjects = 0;
+		m.animations = ModelConfig.animationNumber;
+
+		std::wstring str = ModelConfig.TextureName;
+		std::string str2(" ", str.length());
+		std::copy(str.begin(), str.end(), str2.begin());
+		sprintf(m.textureName, str2.c_str());
+
+		oFile.write((char*)&m, sizeof(model_info));
+
+
+		Log(L"Saved Model Header");
+
+
+
+		for (int i = 0; i < Skeleton.size(); i++)
+			oFile.write((char*)&Skeleton[i], sizeof(bone_info));
+
+
+		Log(L"Saved Skeleton");
+
+
+
+		group_info group;
+		sprintf(group.name, Models[0].Name.c_str());
+		group.faces = Models[0].Faces.size();
+		group.verts = Models[0].Verts.size();
+		group.type = 2;
+		group.unk = 1;
+
+		oFile.write((char*)&group, sizeof(group_info));
+
+
+		Log(L"Saved Group Info");
+
+
+
+		for (int i = 0; i < Models[0].Verts.size(); i++)
+		{
+			oFile.write((char*)&Models[0].Verts[i].vert, sizeof(v));
+			oFile.write((char*)&Models[0].Normals[i], sizeof(vn));
+
+			if (!dontFlipUV)
+			{
+				float temp = 1.0f - Models[0].Maps[i].v;
+				Models[0].Maps[i].v = temp;
+			}
+				 
+
+			oFile.write((char*)&Models[0].Maps[i], sizeof(uv));
+			short boneLinks = Models[0].Verts[i].BoneLinks.size();
+
+			oFile.write((char*)&boneLinks, sizeof(short));
+			if (boneLinks > 0)
+				for (int k = 0; k < boneLinks; k++)
+					oFile.write((char*)&Models[0].Verts[i].BoneLinks[k], sizeof(bone_link));
+		}
+
+
+
+
+
+
+		for (int i = 0; i < Models[0].Faces.size(); i++)
+			oFile.write((char*)&Models[0].Faces[i], sizeof(face));
+		Log(L"Saved Group Geometry Data");
+		std::ifstream pAnims(ModelConfig.AnimatedData, std::ifstream::binary);
+
+		int animSize = (int)std::filesystem::file_size(ModelConfig.AnimatedData);
+
+		std::unique_ptr<char[]> animBuff = std::make_unique<char[]>(animSize);
+		pAnims.read(animBuff.get(), animSize);
+		oFile.write(animBuff.get(), animSize);
+		Log(L"Saved Animation Data");
+
+		end_info e;
+		e.header = '\0MAS';
+		oFile.write((char*)&e, sizeof(end_info));
+
+		int end = 1;
+		oFile.write((char*)&end, sizeof(int));
+		Log(L"Saved End Data");
+
+	}
+	else if (ModelConfig.type = M3D_MODEL_STATIC)
+	{
+
+		m3d_header m3d;
+
+		sprintf(m3d.header, "ecbnt,t");
+		m3d.type = M3D_MODEL_STATIC;
+		m3d.version = 1;
+
+		oFile.write((char*)&m3d, sizeof(m3d_header));
+		Log(L"Saved GSM Header");
+
+		int baseOffset = sizeof(m3d_header) + (sizeof(m3d_section) *(m3d.type - 1)) + (sizeof(int) * 3);
+
+		m3d_section section_modelInfo;
+		section_modelInfo.offset = baseOffset;
+		section_modelInfo.size = sizeof(static_model_header);
+		section_modelInfo.type = MODEL_INFO_IDENT;
+
+		oFile.write((char*)&section_modelInfo, sizeof(m3d_section));
+
+		baseOffset += section_modelInfo.size;
+
+		m3d_section section_vertInfo;
+		section_vertInfo.offset = baseOffset;
+		section_vertInfo.size = GetVertDataSize(Models[0]);
+		section_vertInfo.type = VERTICES_IDENT;
+
+		oFile.write((char*)&section_vertInfo, sizeof(m3d_section));
+
+		baseOffset += section_vertInfo.size;
+
+		m3d_section section_faceInfo;
+		section_faceInfo.offset = baseOffset;
+		section_faceInfo.size = GetFaceDataSize(Models[0]);
+		section_faceInfo.type = FACES_IDENT;
+
+		oFile.write((char*)&section_faceInfo, sizeof(m3d_section));
+
+		baseOffset += section_faceInfo.size;
+
+		m3d_section section_endInfo;
+		section_endInfo.offset = baseOffset;
+		section_endInfo.size = sizeof(end_info);
+		section_endInfo.type = END_INFO_IDENT;
+
+		baseOffset += section_endInfo.size;
+
+		oFile.write((char*)&section_endInfo, sizeof(m3d_section));
+
+		int size, offset, pad = 0;
+		size = sizeof(int);
+		offset = baseOffset;
+
+		oFile.write((char*)&size, sizeof(int));
+		oFile.write((char*)&offset, sizeof(int));
+		oFile.write((char*)&pad, sizeof(int));
+
+		static_model_header mi;
+		mi.unk = 1;
+		mi.type = 1;
+		mi.header = 'MSSG';
+		mi.faces = Models[0].Faces.size();
+		mi.vertices = Models[0].Verts.size();
+		Log(L"Texture: " + ModelConfig.TextureName);
+		std::wstring str = ModelConfig.TextureName;
+		std::string str2(" ", str.length());
+		std::copy(str.begin(), str.end(), str2.begin());
+		sprintf(mi.textName, str2.c_str());
+
+
+		oFile.write((char*)&mi, sizeof(static_model_header));
+
+
+		Log(L"Saved Model Header");
+
+
+		for (int i = 0; i < Models[0].Verts.size(); i++)
+		{
+			oFile.write((char*)&Models[0].Verts[i].vert, sizeof(v));
+			oFile.write((char*)&Models[0].Normals[i], sizeof(vn));
+			if (!dontFlipUV)
+			{
+				float temp = 1.0f - Models[0].Maps[i].v;
+				Models[0].Maps[i].v = temp;
+			}
+
+
+			oFile.write((char*)&Models[0].Maps[i], sizeof(uv));
+		}
+
+
+		for (int i = 0; i < Models[0].Faces.size(); i++)
+			oFile.write((char*)&Models[0].Faces[i], sizeof(face));
+
+		Log(L"Saved Geometry");
+		end_info e;
+		e.header = '\0MSG';
+		oFile.write((char*)&e, sizeof(end_info));
+
+		int end = 1;
+		oFile.write((char*)&end, sizeof(int));
+		Log(L"Saved End Data");
+
+	}
+	
+}
+
+void M3DManager::OptimizeForCompilation()
+{
+	if (!IsDlgButtonChecked(eApp::hWindow, M3D_GEO_OPTIMIZE))
+		return;
+
+	// max optimize?
+
+	Log(L"Preparing to optimize");
+
+	if (Models.size() > 1)
+	{
+		MessageBox(eApp::hWindow, L"Model is already optimized", L"Error", MB_ICONERROR);
+		return;
 	}
 
+	std::vector<v_data> copyVerts = Models[0].Verts;
+
+	// generate new faces
+
+	std::vector<face> faces;
+	std::vector<int> faceIDs;
+	std::vector<v_data> newVerts;
+	std::vector<uv> newMaps;
+	std::vector<vn> newNorm;
+
 	for (int i = 0; i < Models[0].Faces.size(); i++)
-		oFile.write((char*)&Models[0].Faces[i], sizeof(face));
+	{
+		face f = Models[0].Faces[i];
 
-	std::ifstream pAnims(ModelConfig.AnimatedData, std::ifstream::binary);
+		int first =	FindFirstVertexNumber(copyVerts, copyVerts[f.face[0]]);
+		int second = FindFirstVertexNumber(copyVerts, copyVerts[f.face[1]]);
+		int third =	FindFirstVertexNumber(copyVerts, copyVerts[f.face[2]]);
 
-	int animSize = (int)std::filesystem::file_size(ModelConfig.AnimatedData);
+		face newFace = { first,second,third };
 
-	std::unique_ptr<char[]> animBuff = std::make_unique<char[]>(animSize);
-	pAnims.read(animBuff.get(), animSize);
-	oFile.write(animBuff.get(), animSize);
+		faceIDs.push_back(first);
+		faceIDs.push_back(second);
+		faceIDs.push_back(third);
+		faces.push_back(newFace);
+
+	}
+
+	std::sort(faceIDs.begin(), faceIDs.end());
+	faceIDs.erase(std::unique(faceIDs.begin(), faceIDs.end()), faceIDs.end());
+
+	for (int i = 0; i < faceIDs.size(); i++)
+	{
+		newVerts.push_back(copyVerts[faceIDs[i]]);
+		newMaps.push_back(Models[0].Maps[faceIDs[i]]);
+		newNorm.push_back(Models[0].Normals[faceIDs[i]]);
+	}
+	
+
+	Log(L"Verts before optimization: " + std::to_wstring(Models[0].Verts.size()));
+	Log(L"Verts after optimization: " + std::to_wstring(newVerts.size()));
+
+	// generate final faces
 
 
-	end_info e;
-	e.header = '\0MAS';
-	oFile.write((char*)&e, sizeof(end_info));
+	std::vector<face> readyFaces;
 
-	int end = 1;
-	oFile.write((char*)&end, sizeof(int));
+	for (int i = 0; i < faces.size(); i++)
+	{
+		face f = faces[i];
 
+		int first  = FindFirstVertexNumber(newVerts, copyVerts[f.face[0]]);
+		int second  = FindFirstVertexNumber(newVerts, copyVerts[f.face[1]]);
+		int third = FindFirstVertexNumber(newVerts, copyVerts[f.face[2]]);
 
+		face newFace = { first, second, third };
+		readyFaces.push_back(newFace);
+	}
+	
+/*
+	for (int i = 0; i < newVerts.size(); i++)
+		printf("v %f %f %f\n", newVerts[i].vert.x, newVerts[i].vert.y, newVerts[i].vert.z);
 
+	for (int i = 0; i < newMaps.size(); i++)
+		printf("vt %f %f\n", newMaps[i].u, 1.0 - newMaps[i].v);
 
+	for (int i = 0; i < newNorm.size(); i++)
+		printf("vn %f %f %f\n", newNorm[i].norm[0], newNorm[i].norm[1], newNorm[i].norm[2]);
+
+	for (int i = 0; i < readyFaces.size(); i++)
+		printf("f %d/%d/%d %d/%d/%d %d/%d/%d\n", readyFaces[i].face[0] + 1, readyFaces[i].face[0] + 1, readyFaces[i].face[0] + 1, 
+			readyFaces[i].face[1] + 1, readyFaces[i].face[1] + 1, readyFaces[i].face[1] + 1, 
+			readyFaces[i].face[2] + 1, readyFaces[i].face[2] + 1, readyFaces[i].face[2] + 1);
+			*/
+
+	Models[0].Verts = newVerts;
+	Models[0].Faces = readyFaces;
+	Models[0].Maps = newMaps;
+	Models[0].Normals = newNorm;
 }
 
 void M3DManager::Decompile(std::wstring folder)
@@ -1345,60 +1584,149 @@ void M3DManager::Decompile(std::wstring folder)
 
 	Log(L"Decompilation folder: " + folder);
 
-	int firstModel = GetFirstAnimatedModel();
+	std::string mName;
 
-	bool flipUV = true;
-
-	if (firstModel < 0)
+	if (ModelType == M3D_MODEL_ANIMATED)
 	{
-		Log(L"No skinned objects in this model.");
-		firstModel = 0;
+		int firstModel = GetFirstAnimatedModel();
+
+		bool flipUV = true;
+
+		if (firstModel < 0)
+		{
+			Log(L"No skinned objects in this model.");
+			firstModel = 0;
+
+		}
+
+		std::string str = Models[firstModel].Name;
+		std::wstring str2(str.length(), L' ');
+		std::copy(str.begin(), str.end(), str2.begin());
+		mName = str;
+		std::wstring name = str2;
+		name += L".smd";
+
+		Log(L"Saving: " + name);
+
+		std::ofstream oFile(name, std::ofstream::binary);
+		oFile << "version 1\nnodes\n" << std::setprecision(4) << std::fixed;
+
+
+
+		for (int a = 0; a < Skeleton.size(); a++)
+		{
+			int parent = Skeleton[a].parentID;
+			if (parent < 0) parent = -1;
+			oFile << Skeleton[a].boneID << " \"" << Skeleton[a].boneName << "\" "
+				<< parent << std::endl;
+		}
+		oFile << "end\n";
+		oFile << "skeleton\n";
+		oFile << "time 0\n";
+		for (int a = 0; a < Skeleton.size(); a++)
+		{
+			vector3d pos = Skeleton[a].pos;
+			quaternion3d qrot = { -Skeleton[a].rot.x, -Skeleton[a].rot.y,-Skeleton[a].rot.z,Skeleton[a].rot.w };
+			vector3d tmprot = quat2vec(qrot);
+			vector3d rot = { degToRad(tmprot.x), degToRad(tmprot.y) ,degToRad(tmprot.z) };
+
+			oFile << Skeleton[a].boneID << " " << pos.x << " " << pos.y << " "
+				<< pos.z << " " << rot.x << " " << rot.y << " " << rot.z << std::endl;
+		}
+
+		oFile << "end\n";
+		oFile << "triangles\n";
+
+		for (int i = 0; i < Models.size(); i++)
+		{
+			for (int a = 0; a < Models[i].Faces.size(); a++)
+			{
+				oFile << ModelInfo.textureName << std::endl;
+				for (int k = 0; k < 3; k++)
+				{
+					v_data verts;
+					vn     normal;
+					uv     maps;
+					verts = Models[i].Verts[Models[i].Faces[a].face[k]];
+					normal = Models[i].Normals[Models[i].Faces[a].face[k]];
+
+					maps = Models[i].Maps[Models[i].Faces[a].face[k]];
+
+					oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
+						<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
+						<< maps.u << " ";
+
+					if (flipUV)
+						oFile << 1.0 - maps.v;
+					else
+						oFile << maps.v;
+
+					if (verts.BoneLinks.size() == 0)
+					{
+						int boneID = GetBoneID(Models[i].Name);
+
+						if (boneID < 0)
+						{
+							MessageBox(eApp::hWindow, L"Cannot combine the model as there's one or more objects without bone relation!", L"Error", MB_ICONERROR);
+							return;
+						}
+						oFile << " " << 1 << " " << boneID << " " << 1.0f;
+						oFile << std::endl;
+					}
+
+					else if (verts.BoneLinks.size() > 0)
+					{
+						oFile << " " << verts.BoneLinks.size();
+
+						for (int x = 0; x < verts.BoneLinks.size(); x++)
+						{
+							oFile << " " << verts.BoneLinks[x].boneID << " " << verts.BoneLinks[x].weight;
+						}
+						oFile << std::endl;
+					}
+					else
+						oFile << std::endl;
+				}
+
+
+			}
+
+		}
+		Log(L"Saved");
+		oFile << "end\n";
 
 	}
+	else if (ModelType == M3D_MODEL_STATIC)
+	{
+	std::wstring str = wsplitString(InputPath, true);
+	std::string tmp(" ", str.length());
+	std::copy(str.begin(), str.end(), tmp.begin());
+	tmp = tmp.substr(0, tmp.length() - 4);
+	mName = tmp;
+	str.replace(str.length() - 4, 4, L".smd");
+	std::wstring name = str;
 
-	std::string str = Models[firstModel].Name;
-	std::wstring str2(str.length(), L' ');
-	std::copy(str.begin(), str.end(), str2.begin());
-
-	std::wstring name = str2;
-	name += L".smd";
-
-	Log(L"Saving: " + name);
 
 	std::ofstream oFile(name, std::ofstream::binary);
+
+
+	wchar_t temp[256];
+	wsprintf(temp, L"Saving  %s", name.c_str());
+	Log(temp);
+
 	oFile << "version 1\nnodes\n" << std::setprecision(4) << std::fixed;
-
-
-
-	for (int a = 0; a < Skeleton.size(); a++)
-	{
-		int parent = Skeleton[a].parentID;
-		if (parent < 0) parent = -1;
-		oFile << Skeleton[a].boneID << " \"" << Skeleton[a].boneName << "\" "
-			<< parent << std::endl;
-	}
+	oFile << "0 \"root\" -1\n";
 	oFile << "end\n";
 	oFile << "skeleton\n";
 	oFile << "time 0\n";
-	for (int a = 0; a < Skeleton.size(); a++)
-	{
-		vector3d pos = Skeleton[a].pos;
-		quaternion3d qrot = { -Skeleton[a].rot.x, -Skeleton[a].rot.y,-Skeleton[a].rot.z,Skeleton[a].rot.w };
-		vector3d tmprot = quat2vec(qrot);
-		vector3d rot = { degToRad(tmprot.x), degToRad(tmprot.y) ,degToRad(tmprot.z) };
-
-		oFile << Skeleton[a].boneID << " " << pos.x << " " << pos.y << " "
-			<< pos.z << " " << rot.x << " " << rot.y << " " << rot.z << std::endl;
-	}
-
+	oFile << "0 0.0 0.0 0.0 0.0 0.0 0.0\n";
 	oFile << "end\n";
 	oFile << "triangles\n";
-
 	for (int i = 0; i < Models.size(); i++)
 	{
 		for (int a = 0; a < Models[i].Faces.size(); a++)
 		{
-			oFile << ModelInfo.textureName << std::endl;
+			oFile << sModelInfo.textName << std::endl;
 			for (int k = 0; k < 3; k++)
 			{
 				v_data verts;
@@ -1411,38 +1739,9 @@ void M3DManager::Decompile(std::wstring folder)
 
 				oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
 					<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
-					<< maps.u << " ";
+					<< maps.u << " " << 1.0 - maps.v << " " << 0;
 
-				if (flipUV)
-					oFile << 1.0 - maps.v;
-				else
-					oFile << maps.v;
-
-				if (verts.BoneLinks.size() == 0)
-				{
-					int boneID = GetBoneID(Models[i].Name);
-
-					if (boneID < 0)
-					{
-						MessageBox(eApp::hWindow, L"Cannot combine the model as there's one or more objects without bone relation!", L"Error", MB_ICONERROR);
-						return;
-					}
-					oFile << " " << 1 << " " << boneID << " " << 1.0f;
-					oFile << std::endl;
-				}
-
-				else if (verts.BoneLinks.size() > 0)
-				{
-					oFile << " " << verts.BoneLinks.size();
-
-					for (int x = 0; x < verts.BoneLinks.size(); x++)
-					{
-						oFile << " " << verts.BoneLinks[x].boneID << " " << verts.BoneLinks[x].weight;
-					}
-					oFile << std::endl;
-				}
-				else
-					oFile << std::endl;
+				oFile << std::endl;
 			}
 
 
@@ -1452,6 +1751,9 @@ void M3DManager::Decompile(std::wstring folder)
 	Log(L"Saved");
 	oFile << "end\n";
 
+	}
+
+	
 
 
 
@@ -1461,6 +1763,8 @@ void M3DManager::Decompile(std::wstring folder)
 
 	Log(L"Saved SMD!");
 	// dump animation info
+
+
 	std::wstring animInfo = L"animationData.bin";
 
 	// dump sections
@@ -1488,10 +1792,21 @@ void M3DManager::Decompile(std::wstring folder)
 
 	ini << "[Model]\n";
 	ini << "Type=" << ModelType << std::endl;
-	ini << "Animations=" << ModelInfo.animations << std::endl;
-	ini << "TextureName=" << ModelInfo.textureName<< std::endl;
-	ini << "AnimationData=" << "animationData.bin" << std::endl;
-	ini << "Model="<< str << ".smd" << std::endl;
+	if (ModelType == M3D_MODEL_ANIMATED)
+	{
+		ini << "Animations=" << ModelInfo.animations << std::endl;
+		ini << "TextureName=" << ModelInfo.textureName << std::endl;
+		ini << "AnimationData=" << "animationData.bin" << std::endl;
+	}
+	else if (ModelType == M3D_MODEL_STATIC)
+	{
+		ini << "TextureName=" << sModelInfo.textName << std::endl;
+	}
+
+
+
+
+	ini << "Model="<< mName << ".smd" << std::endl;
 
 	Log(L"INI generated!");
 
@@ -1548,8 +1863,24 @@ int M3DManager::Get3DDataSize(Miracle3DModel model)
 	int faceSize = model.Faces.size() * sizeof(face);
 
 	int totalSize = verticesSize + boneLinksSize + mapsSize + normSize + faceSize;
-	printf("Total size: %d\n", totalSize);
-	return totalSize;;
+
+	return totalSize;
+}
+
+int M3DManager::GetVertDataSize(Miracle3DModel model)
+{
+	int verticesSize = model.Verts.size() * sizeof(v);
+	int mapsSize = model.Maps.size() * sizeof(uv);
+	int normSize = model.Normals.size() * sizeof(vn);
+
+	int totalSize = verticesSize + mapsSize + normSize;
+
+	return totalSize;
+}
+
+int M3DManager::GetFaceDataSize(Miracle3DModel model)
+{
+	return  model.Faces.size() * sizeof(face);
 }
 
 bool IsValidM3DFile(int id)
@@ -1647,9 +1978,37 @@ std::wstring   SetFolderFromButton(HWND hWnd)
 void PushLogMessage(HWND hWnd, std::wstring msg)
 {
 	msg += L"\r\n";
-	int len= SendMessage(hWnd, WM_GETTEXTLENGTH, 0, 0);
+	int len = SendMessage(hWnd, WM_GETTEXTLENGTH, 0, 0);
 	SendMessage(hWnd, EM_SETSEL, (WPARAM)len, (LPARAM)len);
 	SendMessage(hWnd, EM_REPLACESEL, FALSE, (LPARAM)msg.c_str());
 
+}
+
+v_data FindFirstVertex(std::vector<v_data> data, v_data v)
+{
+	v_data result;
+	for (int i = 0; i < data.size(); i++)
+	{
+		if (areVertsEqual(data[i], v))
+		{
+			result = data[i];
+			break;
+		}
+	}
+	return result;
+}
+
+int FindFirstVertexNumber(std::vector<v_data> data, v_data v)
+{
+	int result = 0;
+	for (int i = 0; i < data.size(); i++)
+	{
+		if (areVertsEqual(v, data[i]))
+		{
+			result = i;
+			break;
+		}
+	}
+	return result;
 }
 

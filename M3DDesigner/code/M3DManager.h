@@ -9,13 +9,7 @@
 
 
 
-#define M3D_DESIGNER_VERSION L"0.6.0"
-
-
-enum eManagerWorkTypes {
-	WORK_INI = 1,
-	WORK_MODEL
-};
+#define M3D_DESIGNER_VERSION L"0.8.0b"
 
 
 struct Miracle3DModel {
@@ -41,6 +35,11 @@ struct Miracle3DDecompiledModel {
 };
 
 
+struct VecDuplicate {
+	int   prim;
+	int   copy;
+};
+
 class M3DManager {
 private:
 	HWND* hTextureNameBox;
@@ -55,7 +54,6 @@ public:
 	model_info	 ModelInfo;
 	static_model_header sModelInfo;
 	Miracle3DDecompiledModel ModelConfig;
-	FILE*	     pLog; 
 	int ModelType;
 	int WorkType;
 	std::vector<m3d_section> Sections;
@@ -69,13 +67,13 @@ public:
 	void OpenINI(std::wstring input);
 	void ReadFile();
 	void ReadINI();
-	void SaveToFile(std::wstring input);
 	void Close();
 	void Log(std::wstring msg);
 	void ExportToSMD(std::wstring folder, bool combine, bool dontFlipUV = true);
 	void ExportToOBJ(std::wstring folder, bool combine, bool dontFlipUV = true);
 	void OpenSMD(std::wstring file);
-	void Compile(std::wstring file);
+	void Compile(std::wstring file, bool dontFlipUV = true);
+	void OptimizeForCompilation();
 	void Decompile(std::wstring folder);
 
 	// gui
@@ -86,6 +84,8 @@ public:
 	int GetBoneID(std::string name);
 	
 	int Get3DDataSize(Miracle3DModel model);
+	int GetVertDataSize(Miracle3DModel model);
+	int GetFaceDataSize(Miracle3DModel model);
 };
 
 bool IsValidM3DFile(int id);
@@ -97,4 +97,5 @@ std::wstring   SetSavePathFromButton(wchar_t* filter, wchar_t* ext, HWND hWnd);
 std::wstring   SetFolderFromButton(HWND hWnd);
 void		   PushLogMessage(HWND hWnd, std::wstring msg);
 
-
+v_data	       FindFirstVertex(std::vector<v_data> data, v_data v);
+int 	       FindFirstVertexNumber(std::vector<v_data> data, v_data v);

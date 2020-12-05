@@ -97,15 +97,6 @@ struct end_info {
 };
 
 
-#include <math.h>
-#define M_PI           3.14159265358979323846f
-
-#define degToRad(angleInDegrees) ((angleInDegrees) * M_PI / 180.0)
-#define radToDeg(angleInRadians) ((angleInRadians) * 180.0 / M_PI)
-
-vector3d		quat2vec(quaternion3d q);
-quaternion3d	vec2quat(vector3d v);
-
 struct v { float x, y, z; };
 struct uv { float u, v; };
 struct vn { float norm[3]; };
@@ -115,3 +106,17 @@ struct v_data {
 	v vert;
 	std::vector<bone_link> BoneLinks;
 };
+
+
+#include <math.h>
+#define M_PI           3.14159265358979323846f
+
+#define degToRad(angleInDegrees) ((angleInDegrees) * M_PI / 180.0)
+#define radToDeg(angleInRadians) ((angleInRadians) * 180.0 / M_PI)
+
+vector3d		quat2vec(quaternion3d q);
+quaternion3d	vec2quat(vector3d v);
+
+bool			areVecsEqual(vector3d v1, vector3d v2);
+bool			areVertsEqual(v_data v1, v_data v2);
+

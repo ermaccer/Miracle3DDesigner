@@ -7,18 +7,15 @@ vector3d quat2vec(quaternion3d q)
 
 	float ysqr = q.y * q.y;
 
-	// roll (x-axis rotation)
 	float t0 = +2.0f * (q.w * q.x + q.y * q.z);
 	float t1 = +1.0f - 2.0f * (q.x * q.x + ysqr);
 	float roll = atan2(t0, t1);
 
-	// pitch (y-axis rotation)
 	float t2 = +2.0f * (q.w * q.y - q.z * q.x);
 	t2 = ((t2 > 1.0f) ? 1.0f : t2);
 	t2 = ((t2 < -1.0f) ? -1.0f : t2);
-	float pitch = asin(t2);
 
-	// yaw (z-axis rotation)
+	float pitch = asin(t2);
 	float t3 = +2.0f * (q.w * q.z + q.x * q.y);
 	float t4 = +1.0f - 2.0f * (ysqr + q.z * q.z);
 	float yaw = atan2(t3, t4);
@@ -48,3 +45,25 @@ quaternion3d vec2quat(vector3d v)
 
 	return q;
 }
+
+bool areVecsEqual(vector3d v1, vector3d v2)
+{
+	if (fabs(v1.x - v2.x) < 0.1f &&
+		(fabs(v1.y - v2.y) < 0.1f) &&
+		(fabs(v1.z - v2.z) < 0.1f))
+		return true;
+	else
+		return false;
+}
+
+bool areVertsEqual(v_data v1, v_data v2)
+{
+	if (fabs(v1.vert.x - v2.vert.x) < 0.01f &&
+		(fabs(v1.vert.y - v2.vert.y) < 0.01f) &&
+		(fabs(v1.vert.z - v2.vert.z) < 0.01f))
+		return true;
+	else
+		return false;
+}
+
+
