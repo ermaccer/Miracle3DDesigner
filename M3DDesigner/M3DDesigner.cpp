@@ -1,4 +1,4 @@
-// Rockstar Text Tool
+// Miracle3DDesigner
 // by ermaccer
 
 #pragma comment(linker,"\"/manifestdependency:type='win32' \
@@ -14,7 +14,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 	AllocConsole();
 	freopen("CONIN$", "r", stdin);
 	freopen("CONOUT$", "w", stdout);
-    freopen("CONOUT$", "w", stderr);
+        freopen("CONOUT$", "w", stderr);
 	eApp::hInst = hInstance;
 
 	eApp::Begin();
