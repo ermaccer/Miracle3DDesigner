@@ -1773,11 +1773,75 @@ void M3DManager::Decompile(std::wstring folder)
 	{
 		if (Sections[i].type == ANIM_INFO_IDENT)
 		{
-			Log(L"Saving animation data");
+			Log(L"Saving animation data:");
+			pFile.seekg(Sections[i].offset, pFile.beg);
+			if (ModelType == M3D_MODEL_ANIMATED)
+			{
+				for (int k = 0; k < ANIM_ENTRIES; k++)
+				{
+					anim_header anim;
+					pFile.read((char*)&anim, sizeof(anim_header));
+
+					std::string str = anim.name;
+					std::wstring wstr(str.begin(), str.end());
+
+	
+					wstr += L".smd";
+					std::ofstream oFile(wstr, std::ofstream::binary);
+
+					for (int a = 0; a < anim.unkAmount; a++)
+					{
+						int unk[2];
+						pFile.read((char*)&unk, sizeof(unk));
+					}
+
+					oFile << "version 1\nnodes\n" << std::setprecision(4) << std::fixed;
+
+
+					for (int a = 0; a < Skeleton.size(); a++)
+					{
+						int parent = Skeleton[a].parentID;
+						if (parent < 0) parent = -1;
+						oFile << Skeleton[a].boneID << " \"" << Skeleton[a].boneName << "\" "
+							<< parent << std::endl;
+					}
+
+					oFile << "end\n";
+					oFile << "skeleton\n";
+					for (int a = 0; a < anim.frames; a++)
+					{
+
+						oFile << "time " << a << std::endl;
+
+						for (int x = 0; x < anim.bones; x++)
+						{
+							anim_frame frame;
+							pFile.read((char*)&frame, sizeof(anim_frame));
+
+							vector3d pos = frame.pos;
+							quaternion3d qrot = { -frame.rot.x, -frame.rot.y,-frame.rot.z,frame.rot.w };
+							vector3d tmprot = quat2vec(qrot);
+							vector3d rot = { degToRad(tmprot.x), degToRad(tmprot.y) ,degToRad(tmprot.z) };
+
+							oFile << frame.boneID << " " << pos.x << " " << pos.y << " "
+								<< pos.z << " " << rot.x << " " << rot.y << " " << rot.z << std::endl;
+
+						}
+
+	
+					}
+					oFile << "end\n"; 
+					Log(L"Saved anim: " + wstr);
+				}
+			}
+
+		
+
+
 			int size = Sections[i].size;
 			std::unique_ptr<char[]> dataBuff = std::make_unique<char[]>(size);
 
-			pFile.seekg(Sections[i].offset, pFile.beg);
+			
 			pFile.read(dataBuff.get(), size);
 
 			std::ofstream animDump(animInfo, std::ofstream::binary);

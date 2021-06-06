@@ -10,7 +10,9 @@
 // sam
 #define BONE_INFO_IDENT    3
 #define GROUP_INFO_IDENT   5
-#define ANIM_INFO_IDENT    61441
+#define ANIM_INFO_IDENT    61441	
+#define ANIM_ENTRIES	   13
+
 
 enum eMiracle3DModelType {
 	M3D_MODEL_STATIC = 5,
@@ -88,6 +90,25 @@ struct group_info {
 	short faces;
 	short unk;
 	short type;
+};
+
+#pragma pack(push,1)
+struct anim_header {
+	short  bones;
+	short  frames;
+	short  framerate;
+	short  unkAmount;
+	short  animID;
+	char   name[24] = {};
+	char   pad;
+
+};
+#pragma (pop)
+
+struct anim_frame {
+	short  boneID;
+	vector3d pos;
+	quaternion3d rot;
 };
 
 

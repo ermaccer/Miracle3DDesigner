@@ -22,6 +22,7 @@
 #define M3D_GEO_OPTIMIZE                1009
 #define M3D_DECOMPILE                   1010
 #define M3D_COMPILE                     1011
+#define M3D_FILE_NAME2                  1012
 #define M3D_COMPILE_FOLDER              1013
 #define M3D_GET_COMPILE_FOLDER          1014
 #define ID_FILE_OPEN                    32771

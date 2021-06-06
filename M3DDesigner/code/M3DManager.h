@@ -9,7 +9,7 @@
 
 
 
-#define M3D_DESIGNER_VERSION L"0.8.0b"
+#define M3D_DESIGNER_VERSION L"0.9"
 
 
 struct Miracle3DModel {
