@@ -1777,7 +1777,7 @@ void M3DManager::Decompile(std::wstring folder)
 			pFile.seekg(Sections[i].offset, pFile.beg);
 			if (ModelType == M3D_MODEL_ANIMATED)
 			{
-				for (int k = 0; k < ANIM_ENTRIES; k++)
+				for (int k = 0; k < ModelInfo.animations; k++)
 				{
 					anim_header anim;
 					pFile.read((char*)&anim, sizeof(anim_header));
