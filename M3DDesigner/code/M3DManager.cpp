@@ -475,7 +475,7 @@ void M3DManager::ExportToSMD(std::wstring folder, bool combine, bool flipUV)
 					maps = Models[i].Maps[Models[i].Faces[a].face[k]];
 
 					oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
-						<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
+						<< normal.norm[0] << " " << normal.norm[1] << " " << normal.norm[2] << " "
 						<< maps.u << " " << 1.0 - maps.v << " " << 0;
 
 					oFile << std::endl;
@@ -558,7 +558,7 @@ void M3DManager::ExportToSMD(std::wstring folder, bool combine, bool flipUV)
 						maps = Models[i].Maps[Models[i].Faces[a].face[k]];
 
 						oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
-							<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
+							<< normal.norm[0] << " " << normal.norm[1] << " " << normal.norm[2] << " "
 							<< maps.u << " ";
 
 						if (flipUV)
@@ -661,7 +661,7 @@ void M3DManager::ExportToSMD(std::wstring folder, bool combine, bool flipUV)
 							maps = Models[i].Maps[Models[i].Faces[a].face[k]];
 
 							oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
-								<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
+								<< normal.norm[0] << " " << normal.norm[1] << " " << normal.norm[2] << " "
 								<< maps.u << " ";
 							if (flipUV)
 								oFile << 1.0 - maps.v;
@@ -717,7 +717,7 @@ void M3DManager::ExportToSMD(std::wstring folder, bool combine, bool flipUV)
 							maps = Models[i].Maps[Models[i].Faces[a].face[k]];
 
 							oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
-								<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
+								<< normal.norm[0] << " " << normal.norm[1] << " " << normal.norm[2] << " "
 								<< maps.u << " " << 1.0 - maps.v << " " <<  0;
 
 							oFile << std::endl;
@@ -1653,7 +1653,7 @@ void M3DManager::Decompile(std::wstring folder)
 					maps = Models[i].Maps[Models[i].Faces[a].face[k]];
 
 					oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
-						<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
+						<< normal.norm[0] << " " << normal.norm[1] << " " << normal.norm[2] << " "
 						<< maps.u << " ";
 
 					if (flipUV)
@@ -1738,7 +1738,7 @@ void M3DManager::Decompile(std::wstring folder)
 				maps = Models[i].Maps[Models[i].Faces[a].face[k]];
 
 				oFile << 0 << " " << verts.vert.x << " " << verts.vert.y << " " << verts.vert.z << " "
-					<< normal.norm[0] << " " << normal.norm[0] << " " << normal.norm[2] << " "
+					<< normal.norm[0] << " " << normal.norm[1] << " " << normal.norm[2] << " "
 					<< maps.u << " " << 1.0 - maps.v << " " << 0;
 
 				oFile << std::endl;
@@ -1767,6 +1767,30 @@ void M3DManager::Decompile(std::wstring folder)
 
 	std::wstring animInfo = L"animationData.bin";
 
+
+	Log(L"Generating INI...");
+
+	std::ofstream ini(L"model.ini", std::ofstream::binary);
+
+	ini << "[Model]\n";
+	ini << "Type=" << ModelType << std::endl;
+	if (ModelType == M3D_MODEL_ANIMATED)
+	{
+		ini << "Animations=" << ModelInfo.animations << std::endl;
+		ini << "TextureName=" << ModelInfo.textureName << std::endl;
+		ini << "AnimationData=" << "animationData.bin" << std::endl;
+	}
+	else if (ModelType == M3D_MODEL_STATIC)
+	{
+		ini << "TextureName=" << sModelInfo.textName << std::endl;
+	}
+
+
+
+
+	ini << "Model=" << mName << ".smd" << std::endl;
+
+
 	// dump sections
 	Log(L"Enumerating sections...");
 	for (int i = 0; i < Sections.size(); i++)
@@ -1777,16 +1801,25 @@ void M3DManager::Decompile(std::wstring folder)
 			pFile.seekg(Sections[i].offset, pFile.beg);
 			if (ModelType == M3D_MODEL_ANIMATED)
 			{
+
 				for (int k = 0; k < ModelInfo.animations; k++)
 				{
+					ini << "[Anim" << k << "]\n";
 					anim_header anim;
 					pFile.read((char*)&anim, sizeof(anim_header));
 
 					std::string str = anim.name;
-					std::wstring wstr(str.begin(), str.end());
 
-	
+					std::wstring wstr(str.begin(), str.end());
 					wstr += L".smd";
+					ini << "ID=" << anim.animID << std::endl;
+					ini << "Framerate=" << anim.framerate << std::endl;
+					ini << "UnkAmount=" << anim.unkAmount << std::endl;
+					ini << "Name=" << anim.name << std::endl;
+					ini << "File=" << str  << ".smd" << std::endl;
+
+
+
 					std::ofstream oFile(wstr, std::ofstream::binary);
 
 					for (int a = 0; a < anim.unkAmount; a++)
@@ -1850,31 +1883,37 @@ void M3DManager::Decompile(std::wstring folder)
 		}
 	}
 
-	Log(L"Generating INI...");
-
-	std::ofstream ini(L"model.ini", std::ofstream::binary);
-
-	ini << "[Model]\n";
-	ini << "Type=" << ModelType << std::endl;
-	if (ModelType == M3D_MODEL_ANIMATED)
-	{
-		ini << "Animations=" << ModelInfo.animations << std::endl;
-		ini << "TextureName=" << ModelInfo.textureName << std::endl;
-		ini << "AnimationData=" << "animationData.bin" << std::endl;
-	}
-	else if (ModelType == M3D_MODEL_STATIC)
-	{
-		ini << "TextureName=" << sModelInfo.textName << std::endl;
-	}
-
-
-
-
-	ini << "Model="<< mName << ".smd" << std::endl;
 
 	Log(L"INI generated!");
 
 	
+}
+
+void M3DManager::ReadSMDAnim(std::wstring file)
+{
+	if (file.empty())
+		return;
+
+	FILE* pFile = _wfopen(file.c_str(), L"rb");
+
+	char szLine[1024];
+	char* tempLine;
+	Miracle3DModel model;
+	Miracle3DAnimation anim;
+	Log(L"Opening: " + file);
+
+	// first line must be version 1
+
+	fgets(szLine, sizeof(szLine), pFile);
+
+
+	if (!(strncmp(szLine, "version 1", 9) == 0))
+	{
+		MessageBox(eApp::hWindow, L"SMD file is not valid!", L"Error", MB_ICONERROR);
+		return;
+	}
+
+	Log(L"Opened SMD ok!");
 }
 
 void M3DManager::SetTextureText(std::wstring text)

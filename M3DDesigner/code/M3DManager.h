@@ -9,7 +9,7 @@
 
 
 
-#define M3D_DESIGNER_VERSION L"0.9"
+#define M3D_DESIGNER_VERSION L"0.9.1"
 
 
 struct Miracle3DModel {
@@ -22,6 +22,11 @@ struct Miracle3DModel {
 
 
 	std::string Name;
+};
+
+struct Miracle3DAnimation {
+	anim_header Anim;
+	std::vector<anim_frame> Frames;
 };
 
 
@@ -59,6 +64,7 @@ public:
 	std::vector<m3d_section> Sections;
 	std::vector<bone_info>   Skeleton;
 	std::vector<Miracle3DModel> Models;
+	std::vector<Miracle3DAnimation> Frames;
 
 
 	void         Init(HWND* list, HWND* box, HWND* key, HWND* table);
@@ -75,6 +81,7 @@ public:
 	void Compile(std::wstring file, bool dontFlipUV = true);
 	void OptimizeForCompilation();
 	void Decompile(std::wstring folder);
+	void ReadSMDAnim(std::wstring file);
 
 	// gui
 	void SetTextureText(std::wstring text);
