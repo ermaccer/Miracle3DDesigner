@@ -1870,7 +1870,7 @@ void M3DManager::Decompile(std::wstring folder)
 
 		
 
-
+			pFile.seekg(Sections[i].offset, pFile.beg);
 			int size = Sections[i].size;
 			std::unique_ptr<char[]> dataBuff = std::make_unique<char[]>(size);
 
